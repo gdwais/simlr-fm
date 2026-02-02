@@ -1,0 +1,16 @@
+# Root gitignore for Simlr.fm
+
+# deps
+**/node_modules
+
+# next
+**/.next
+**/out
+
+# env
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
