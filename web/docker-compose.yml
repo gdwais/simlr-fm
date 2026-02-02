@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_USER: simlr
+      POSTGRES_PASSWORD: simlr
+      POSTGRES_DB: simlr
+    volumes:
+      - simlr_pg:/var/lib/postgresql/data
+volumes:
+  simlr_pg:
