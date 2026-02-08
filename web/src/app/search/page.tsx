@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
 type SearchItem = {
-  spotifyAlbumId: string;
+  mbid: string;
   title: string;
-  artists: { id: string; name: string }[];
+  artists: { mbid: string; name: string }[];
   coverUrl: string | null;
-  releaseDate: string;
+  releaseYear: number | null;
 };
 
 export default function SearchPage() {
@@ -24,9 +24,9 @@ export default function SearchPage() {
   async function runSearch(nextQ: string) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(nextQ)}`);
-      const data = (await res.json()) as { items: SearchItem[] };
-      setItems(data.items ?? []);
+      const res = await fetch(`/api/albums/search?q=${encodeURIComponent(nextQ)}`);
+      const data = (await res.json()) as { results: SearchItem[] };
+      setItems(data.results ?? []);
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export default function SearchPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((a) => (
-            <Link key={a.spotifyAlbumId} href={`/album/${a.spotifyAlbumId}`}>
+            <Link key={a.mbid} href={`/album/${a.mbid}`}>
               <Card className="flex gap-4 p-4 hover:bg-accent/50">
                 <div className="relative h-16 w-16 overflow-hidden rounded">
                   {a.coverUrl ? (
@@ -85,7 +85,7 @@ export default function SearchPage() {
                     {a.artists.map((x) => x.name).join(", ")}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {a.releaseDate}
+                    {a.releaseYear || 'Unknown year'}
                   </div>
                 </div>
               </Card>

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { prisma } from "@/lib/prisma";
 
 const UpsertSchema = z.object({
@@ -10,8 +9,7 @@ const UpsertSchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = UpsertSchema.parse(await req.json());
@@ -43,8 +41,7 @@ const ClearSchema = z.object({
 });
 
 export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = ClearSchema.parse(await req.json());

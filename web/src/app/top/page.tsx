@@ -12,7 +12,7 @@ type Item = {
     title: string;
     coverUrl: string | null;
     releaseYear: number | null;
-    artistsJson: any;
+    artistsJson: unknown;
   };
   avg: number;
   count: number;

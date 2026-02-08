@@ -1,30 +1,30 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+
 import { prisma } from "@/lib/prisma";
 import { median as medianFn, ratingHistogram } from "@/lib/stats";
+import { createAlbumService } from "@/lib/services/album.service";
 
 const BodySchema = z.object({
-  spotifyAlbumId: z.string().min(1),
+  albumId: z.string().min(1), // Accepts both MBID and Spotify ID
   score: z.number().int().min(1).max(10),
 });
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
+  // userId already fetched
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = BodySchema.parse(await req.json());
 
-  const album = await prisma.album.findUnique({
-    where: { spotifyAlbumId: body.spotifyAlbumId },
-    select: { id: true },
-  });
+  // Resolve album ID (supports both MBID and Spotify ID)
+  const albumService = createAlbumService(prisma);
+  const albumId = await albumService.resolveAlbumId(body.albumId);
 
-  if (!album) {
+  if (!albumId) {
     return NextResponse.json(
       { error: "Album not found (upsert it first)" },
       { status: 400 },
@@ -33,11 +33,11 @@ export async function POST(req: Request) {
 
   const rating = await prisma.rating.upsert({
     where: {
-      userId_albumId: { userId, albumId: album.id },
+      userId_albumId: { userId, albumId },
     },
     create: {
       userId,
-      albumId: album.id,
+      albumId,
       score: body.score,
     },
     update: {
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   });
 
   const all = await prisma.rating.findMany({
-    where: { albumId: album.id },
+    where: { albumId },
     select: { score: true },
   });
   const scores = all.map((r) => r.score);

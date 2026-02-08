@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+
 import { prisma } from "@/lib/prisma";
 
 const BodySchema = z.object({
@@ -11,8 +11,8 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
+  // userId already fetched
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

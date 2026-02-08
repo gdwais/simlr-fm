@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/server-auth";
 import { Button } from "@/components/ui/button";
 
 export async function SiteNav() {
-  const session = await getServerSession(authOptions);
+  const user = await getCurrentUser();
 
   return (
     <header className="border-b bg-background/70 backdrop-blur">
@@ -35,18 +34,18 @@ export async function SiteNav() {
             Profile
           </Link>
 
-          {session?.user ? (
-            <form action="/api/auth/signout" method="post">
+          {user ? (
+            <form action="/api/auth/logout" method="post">
               <Button variant="secondary" size="sm" type="submit">
                 Sign out
               </Button>
             </form>
           ) : (
-            <form action="/api/auth/signin" method="post">
-              <Button size="sm" type="submit">
+            <Link href="/login">
+              <Button size="sm">
                 Sign in
               </Button>
-            </form>
+            </Link>
           )}
         </nav>
       </div>

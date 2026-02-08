@@ -19,129 +19,102 @@ model User {
   username      String?   @unique
   image         String?
   email         String?   @unique
-  emailVerified DateTime?
+  emailVerified DateTime? @map("email_verified")
+  passwordHash  String?   @map("password_hash")
 
-  accounts Account[]
-  sessions Session[]
+  ratings       Rating[]
+  simlrReasons  SimlrReason[]
+  posts         Post[]
+  comments      Comment[]
+  votes         Vote[]
+  rushmore      RushmoreSlot[]
+  refreshTokens RefreshToken[]
 
-  ratings      Rating[]
-  simlrReasons SimlrReason[]
-  posts        Post[]
-  comments     Comment[]
-  votes        Vote[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  rushmore RushmoreSlot[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Account {
-  id               String  @id @default(cuid())
-  userId           String
-  type             String
-  provider         String
-  providerAccountId String
-  refresh_token    String?
-  access_token     String?
-  expires_at       Int?
-  token_type       String?
-  scope            String?
-  id_token         String?
-  session_state    String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
+  @@map("users")
 }
 
 model Album {
-  id             String   @id @default(cuid())
-  spotifyAlbumId String   @unique
+  id             String  @id @default(cuid())
+  mbid           String? @unique
+  spotifyAlbumId String? @unique @map("spotify_album_id") // Legacy support, nullable
   title          String
-  artistsJson    Json
-  coverUrl       String?
-  releaseYear    Int?
+  artistsJson    Json    @map("artists_json")
+  coverUrl       String? @map("cover_url")
+  releaseYear    Int?    @map("release_year")
+  mbArtistId     String? @map("mb_artist_id") // Primary artist MBID
 
-  ratings      Rating[]
-  simlrSources SimlrEdge[] @relation("SimlrSource")
-  simlrTargets SimlrEdge[] @relation("SimlrTarget")
-  posts        Post[]
+  ratings       Rating[]
+  simlrSources  SimlrEdge[]    @relation("SimlrSource")
+  simlrTargets  SimlrEdge[]    @relation("SimlrTarget")
+  posts         Post[]
   rushmoreSlots RushmoreSlot[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([mbid])
+  @@index([spotifyAlbumId])
+  @@map("albums")
 }
 
 model Rating {
   id      String @id @default(cuid())
-  userId  String
-  albumId String
+  userId  String @map("user_id")
+  albumId String @map("album_id")
   score   Int
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, albumId])
   @@index([albumId])
+  @@map("ratings")
 }
 
 model SimlrEdge {
   id            String @id @default(cuid())
-  sourceAlbumId String
-  targetAlbumId String
+  sourceAlbumId String @map("source_album_id")
+  targetAlbumId String @map("target_album_id")
 
   sourceAlbum Album @relation("SimlrSource", fields: [sourceAlbumId], references: [id], onDelete: Cascade)
   targetAlbum Album @relation("SimlrTarget", fields: [targetAlbumId], references: [id], onDelete: Cascade)
 
   reasons SimlrReason[]
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([sourceAlbumId, targetAlbumId])
   @@index([sourceAlbumId])
   @@index([targetAlbumId])
+  @@map("simlr_edges")
 }
 
 model SimlrReason {
   id     String @id @default(cuid())
-  edgeId String
-  userId String
+  edgeId String @map("edge_id")
+  userId String @map("user_id")
   reason String
 
   edge SimlrEdge @relation(fields: [edgeId], references: [id], onDelete: Cascade)
   user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([edgeId, userId])
   @@index([edgeId])
+  @@map("simlr_reasons")
 }
 
 model Post {
   id      String @id @default(cuid())
-  albumId String
-  userId  String
+  albumId String @map("album_id")
+  userId  String @map("user_id")
   title   String
   body    String
 
@@ -149,17 +122,18 @@ model Post {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   comments Comment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([albumId])
+  @@map("posts")
 }
 
 model Comment {
   id       String  @id @default(cuid())
-  postId   String
-  userId   String
-  parentId String?
+  postId   String  @map("post_id")
+  userId   String  @map("user_id")
+  parentId String? @map("parent_id")
   body     String
 
   post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -167,38 +141,56 @@ model Comment {
   parent  Comment?  @relation("CommentParent", fields: [parentId], references: [id])
   replies Comment[] @relation("CommentParent")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([postId])
+  @@map("comments")
 }
 
 model Vote {
   id         String         @id @default(cuid())
-  userId     String
-  entityType VoteEntityType
-  entityId   String
+  userId     String         @map("user_id")
+  entityType VoteEntityType @map("entity_type")
+  entityId   String         @map("entity_id")
   value      Int
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, entityType, entityId])
   @@index([entityType, entityId])
+  @@map("votes")
 }
 
 model RushmoreSlot {
   id      String @id @default(cuid())
-  userId  String
+  userId  String @map("user_id")
   slot    Int
-  albumId String
+  albumId String @map("album_id")
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, slot])
   @@unique([userId, albumId])
   @@index([userId])
+  @@map("rushmore_slots")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
 }

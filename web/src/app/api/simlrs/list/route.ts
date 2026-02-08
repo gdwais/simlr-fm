@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { prisma } from "@/lib/prisma";
 
 const QuerySchema = z.object({
@@ -10,13 +9,12 @@ const QuerySchema = z.object({
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
 
   const url = new URL(req.url);
   const parsed = QuerySchema.safeParse({
     spotifyAlbumId: url.searchParams.get("spotifyAlbumId") ?? "",
-    sort: (url.searchParams.get("sort") as any) ?? undefined,
+    sort: url.searchParams.get("sort") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Missing spotifyAlbumId" }, { status: 400 });

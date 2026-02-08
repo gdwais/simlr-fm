@@ -1,42 +1,39 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+
 import { prisma } from "@/lib/prisma";
+import { createAlbumService } from "@/lib/services/album.service";
 
 const CreateSchema = z.object({
-  sourceSpotifyAlbumId: z.string().min(1),
-  targetSpotifyAlbumId: z.string().min(1),
+  sourceAlbumId: z.string().min(1), // Accepts both MBID and Spotify ID
+  targetAlbumId: z.string().min(1), // Accepts both MBID and Spotify ID
   reason: z.string().min(140).max(280),
 });
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
+  // userId already fetched
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = CreateSchema.parse(await req.json());
-  if (body.sourceSpotifyAlbumId === body.targetSpotifyAlbumId) {
+  if (body.sourceAlbumId === body.targetAlbumId) {
     return NextResponse.json(
       { error: "Source and target must be different albums" },
       { status: 400 },
     );
   }
 
-  const [source, target] = await Promise.all([
-    prisma.album.findUnique({
-      where: { spotifyAlbumId: body.sourceSpotifyAlbumId },
-      select: { id: true },
-    }),
-    prisma.album.findUnique({
-      where: { spotifyAlbumId: body.targetSpotifyAlbumId },
-      select: { id: true },
-    }),
+  // Resolve album IDs (supports both MBID and Spotify ID)
+  const albumService = createAlbumService(prisma);
+  const [sourceId, targetId] = await Promise.all([
+    albumService.resolveAlbumId(body.sourceAlbumId),
+    albumService.resolveAlbumId(body.targetAlbumId),
   ]);
 
-  if (!source || !target) {
+  if (!sourceId || !targetId) {
     return NextResponse.json(
       { error: "Album not found. Upsert both albums first." },
       { status: 400 },
@@ -45,7 +42,7 @@ export async function POST(req: Request) {
 
   // Require user has rated the source album (anti-spam gating)
   const userRating = await prisma.rating.findUnique({
-    where: { userId_albumId: { userId: userId, albumId: source.id } },
+    where: { userId_albumId: { userId: userId, albumId: sourceId } },
     select: { id: true },
   });
 
@@ -60,13 +57,13 @@ export async function POST(req: Request) {
     const e = await tx.simlrEdge.upsert({
       where: {
         sourceAlbumId_targetAlbumId: {
-          sourceAlbumId: source.id,
-          targetAlbumId: target.id,
+          sourceAlbumId: sourceId,
+          targetAlbumId: targetId,
         },
       },
       create: {
-        sourceAlbumId: source.id,
-        targetAlbumId: target.id,
+        sourceAlbumId: sourceId,
+        targetAlbumId: targetId,
       },
       update: {},
       select: { id: true },

@@ -13,21 +13,21 @@ type Me = {
   username: string | null;
   name: string | null;
   image: string | null;
-  rushmore: { slot: number; album: { spotifyAlbumId: string; title: string; coverUrl: string | null } }[];
+  rushmore: { slot: number; album: { mbid: string | null; spotifyAlbumId: string | null; title: string; coverUrl: string | null } }[];
 };
 
 type RatingItem = {
   score: number;
   updatedAt: string;
-  album: { spotifyAlbumId: string; title: string; coverUrl: string | null };
+  album: { mbid: string | null; spotifyAlbumId: string | null; title: string; coverUrl: string | null };
 };
 
 type SearchItem = {
-  spotifyAlbumId: string;
+  mbid: string;
   title: string;
-  artists: { id: string; name: string }[];
+  artists: { mbid: string; name: string }[];
   coverUrl: string | null;
-  releaseDate: string;
+  releaseYear: number | null;
 };
 
 export default function MePage() {
@@ -55,13 +55,21 @@ export default function MePage() {
     try {
       const res = await fetch("/api/me");
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Unauthorized");
+      if (!res.ok) {
+        // Not logged in - just show the sign in message
+        setMe(null);
+        return;
+      }
       setMe(data.me);
       setUsername(data.me?.username ?? "");
 
       const rr = await fetch("/api/me/ratings");
       const rd = await rr.json();
       if (rr.ok) setMyRatings(rd.items ?? []);
+    } catch (error) {
+      // Handle network errors gracefully
+      console.error('Failed to load profile:', error);
+      setMe(null);
     } finally {
       setLoading(false);
     }
@@ -88,19 +96,21 @@ export default function MePage() {
   }
 
   async function searchAlbums(nextQ: string) {
-    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(nextQ)}`);
-    const data = (await res.json()) as { items: SearchItem[] };
-    setResults(data.items ?? []);
+    const res = await fetch(`/api/albums/search?q=${encodeURIComponent(nextQ)}`);
+    const data = (await res.json()) as { results: SearchItem[] };
+    setResults(data.results ?? []);
   }
 
-  async function setRushmore(slotNum: number, spotifyAlbumId: string) {
+  async function setRushmore(slotNum: number, mbid: string) {
     setBusy(true);
     try {
-      await fetch(`/api/albums/${spotifyAlbumId}/upsert`, { method: "POST" });
+      await fetch(`/api/albums/${mbid}/upsert`, { method: "POST" });
+
+      // Get the internal album ID
       const res = await fetch("/api/me/rushmore", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slot: slotNum, spotifyAlbumId }),
+        body: JSON.stringify({ slot: slotNum, spotifyAlbumId: mbid }), // API still expects this field name
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Failed to set Rushmore slot");
@@ -187,7 +197,7 @@ export default function MePage() {
                     </div>
                     <div className="mt-2 text-sm">
                       {r ? (
-                        <Link href={`/album/${r.album.spotifyAlbumId}`} className="hover:underline">
+                        <Link href={`/album/${r.album.mbid ?? r.album.spotifyAlbumId}`} className="hover:underline">
                           {r.album.title}
                         </Link>
                       ) : (
@@ -233,16 +243,16 @@ export default function MePage() {
               <div className="mt-3 grid grid-cols-1 gap-2">
                 {results.map((a) => (
                   <button
-                    key={a.spotifyAlbumId}
+                    key={a.mbid}
                     className="rounded border p-3 text-left hover:bg-accent"
                     disabled={busy}
-                    onClick={() => setRushmore(slot, a.spotifyAlbumId)}
+                    onClick={() => setRushmore(slot, a.mbid)}
                     type="button"
                   >
                     <div className="font-medium">
                       {a.title} — {a.artists.map((x) => x.name).join(", ")}
                     </div>
-                    <div className="text-xs text-muted-foreground">{a.releaseDate}</div>
+                    <div className="text-xs text-muted-foreground">{a.releaseYear || 'Unknown year'}</div>
                   </button>
                 ))}
               </div>
@@ -261,12 +271,15 @@ export default function MePage() {
             </p>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {myRatings.map((r) => (
-                <Link
-                  key={r.album.spotifyAlbumId + r.updatedAt}
-                  href={`/album/${r.album.spotifyAlbumId}`}
-                  className="rounded-lg border p-4 hover:bg-accent/50"
-                >
+              {myRatings.map((r) => {
+                const albumId = r.album.mbid ?? r.album.spotifyAlbumId;
+                if (!albumId) return null;
+                return (
+                  <Link
+                    key={albumId + r.updatedAt}
+                    href={`/album/${albumId}`}
+                    className="rounded-lg border p-4 hover:bg-accent/50"
+                  >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate font-medium">{r.album.title}</div>
@@ -279,7 +292,8 @@ export default function MePage() {
                     </div>
                   </div>
                 </Link>
-              ))}
+                );
+              })}
 
               {myRatings.length === 0 && (
                 <p className="text-sm text-muted-foreground">No ratings yet.</p>

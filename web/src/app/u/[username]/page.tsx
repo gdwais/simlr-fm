@@ -21,6 +21,7 @@ export default async function UserProfilePage({
           slot: true,
           album: {
             select: {
+              mbid: true,
               spotifyAlbumId: true,
               title: true,
               coverUrl: true,
@@ -35,7 +36,7 @@ export default async function UserProfilePage({
         select: {
           score: true,
           updatedAt: true,
-          album: { select: { spotifyAlbumId: true, title: true, coverUrl: true } },
+          album: { select: { mbid: true, spotifyAlbumId: true, title: true, coverUrl: true } },
         },
         orderBy: { updatedAt: "desc" },
         take: 20,
@@ -88,10 +89,13 @@ export default async function UserProfilePage({
                 </div>
               );
             }
+            const albumId = r.album.mbid ?? r.album.spotifyAlbumId;
+            if (!albumId) return null;
+
             return (
               <Link
                 key={slot}
-                href={`/album/${r.album.spotifyAlbumId}`}
+                href={`/album/${albumId}`}
                 className="rounded-lg border p-4 hover:bg-accent/50"
               >
                 <div className="relative aspect-square w-full overflow-hidden rounded">
@@ -120,12 +124,16 @@ export default async function UserProfilePage({
       <section className="mt-10">
         <h2 className="text-lg font-semibold">Recent ratings</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {user.ratings.map((r) => (
-            <Link
-              key={r.album.spotifyAlbumId + r.updatedAt}
-              href={`/album/${r.album.spotifyAlbumId}`}
-              className="rounded-lg border p-4 hover:bg-accent/50"
-            >
+          {user.ratings.map((r) => {
+            const albumId = r.album.mbid ?? r.album.spotifyAlbumId;
+            if (!albumId) return null;
+
+            return (
+              <Link
+                key={albumId + r.updatedAt}
+                href={`/album/${albumId}`}
+                className="rounded-lg border p-4 hover:bg-accent/50"
+              >
               <div className="flex gap-4">
                 <div className="relative h-14 w-14 overflow-hidden rounded">
                   {r.album.coverUrl ? (
@@ -151,7 +159,8 @@ export default async function UserProfilePage({
                 </div>
               </div>
             </Link>
-          ))}
+            );
+          })}
           {user.ratings.length === 0 && (
             <p className="text-sm text-muted-foreground">No ratings yet.</p>
           )}

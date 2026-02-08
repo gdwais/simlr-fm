@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const me = await prisma.user.findUnique({
@@ -20,7 +18,7 @@ export async function GET() {
         select: {
           slot: true,
           album: {
-            select: { spotifyAlbumId: true, title: true, coverUrl: true },
+            select: { mbid: true, spotifyAlbumId: true, title: true, coverUrl: true },
           },
         },
         orderBy: { slot: "asc" },
@@ -40,8 +38,7 @@ const UpdateSchema = z.object({
 });
 
 export async function PATCH(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = UpdateSchema.parse(await req.json());
@@ -53,9 +50,9 @@ export async function PATCH(req: Request) {
       select: { id: true, username: true },
     });
     return NextResponse.json({ me });
-  } catch (e: any) {
+  } catch (e: unknown) {
     // Prisma unique constraint
-    if (e?.code === "P2002") {
+    if (typeof e === "object" && e !== null && "code" in e && e.code === "P2002") {
       return NextResponse.json({ error: "Username already taken" }, { status: 409 });
     }
     throw e;

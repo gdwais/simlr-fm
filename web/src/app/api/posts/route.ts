@@ -1,45 +1,45 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getCurrentUserId } from "@/lib/server-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
+
 import { prisma } from "@/lib/prisma";
 import { hotScore } from "@/lib/rank";
+import { createAlbumService } from "@/lib/services/album.service";
 
 const CreateSchema = z.object({
-  spotifyAlbumId: z.string().min(1),
+  albumId: z.string().min(1), // Accepts both MBID and Spotify ID
   title: z.string().min(1).max(120),
   body: z.string().min(1).max(5000),
 });
 
 const ListSchema = z.object({
-  spotifyAlbumId: z.string().min(1),
+  albumId: z.string().min(1), // Accepts both MBID and Spotify ID
   sort: z.enum(["new", "top", "hot"]).optional(),
 });
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
+  // userId already fetched
 
   const url = new URL(req.url);
   const parsed = ListSchema.safeParse({
-    spotifyAlbumId: url.searchParams.get("spotifyAlbumId") ?? "",
-    sort: (url.searchParams.get("sort") as any) ?? undefined,
+    albumId: url.searchParams.get("albumId") ?? "",
+    sort: url.searchParams.get("sort") ?? undefined,
   });
   if (!parsed.success) {
-    return NextResponse.json({ error: "Missing spotifyAlbumId" }, { status: 400 });
+    return NextResponse.json({ error: "Missing albumId" }, { status: 400 });
   }
 
-  const album = await prisma.album.findUnique({
-    where: { spotifyAlbumId: parsed.data.spotifyAlbumId },
-    select: { id: true },
-  });
+  // Resolve album ID (supports both MBID and Spotify ID)
+  const albumService = createAlbumService(prisma);
+  const albumId = await albumService.resolveAlbumId(parsed.data.albumId);
 
-  if (!album) return NextResponse.json({ items: [] });
+  if (!albumId) return NextResponse.json({ items: [] });
 
   const sort = parsed.data.sort ?? "hot";
 
   const posts = await prisma.post.findMany({
-    where: { albumId: album.id },
+    where: { albumId },
     select: {
       id: true,
       title: true,
@@ -87,20 +87,19 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
+  const userId = await getCurrentUserId();
+  // userId already fetched
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = CreateSchema.parse(await req.json());
 
-  const album = await prisma.album.findUnique({
-    where: { spotifyAlbumId: body.spotifyAlbumId },
-    select: { id: true },
-  });
+  // Resolve album ID (supports both MBID and Spotify ID)
+  const albumService = createAlbumService(prisma);
+  const albumId = await albumService.resolveAlbumId(body.albumId);
 
-  if (!album) {
+  if (!albumId) {
     return NextResponse.json(
       { error: "Album not found (upsert it first)" },
       { status: 400 },
@@ -109,7 +108,7 @@ export async function POST(req: Request) {
 
   const post = await prisma.post.create({
     data: {
-      albumId: album.id,
+      albumId,
       userId,
       title: body.title,
       body: body.body,
